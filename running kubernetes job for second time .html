@@ -1,0 +1,152 @@
+<h1 class="code-line" data-line-start=0 data-line-end=1 ><a id="Guide_Editing__Rerunning_a_Kubernetes_Job_Efficiently_0"></a>Guide: Editing &amp; Rerunning a Kubernetes Job Efficiently</h1>
+<p class="has-line-data" data-line-start="2" data-line-end="3">This guide explains how to modify and test your script without rebuilding images unnecessarily. It covers:</p>
+<ol>
+<li class="has-line-data" data-line-start="3" data-line-end="4">Quick script testing inside a running container (without affecting Kubernetes).</li>
+<li class="has-line-data" data-line-start="4" data-line-end="5">Deploying script changes in Kubernetes (ensuring updates persist in new Pods).</li>
+<li class="has-line-data" data-line-start="5" data-line-end="7">Debugging and checking logs for both approaches.</li>
+</ol>
+<h2 class="code-line" data-line-start=7 data-line-end=8 ><a id="When_to_Use_This_Approach_7"></a>When to Use This Approach?</h2>
+<table class="table table-striped table-bordered">
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Use nerdctl cp &amp; exec</th>
+<th>Rebuild Image &amp; Reapply Job</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Quick script testing inside a running container</td>
+<td>✅ Yes</td>
+<td>❌ No</td>
+</tr>
+<tr>
+<td>Changes need to persist in a Kubernetes Job</td>
+<td>❌ No</td>
+<td>✅ Yes</td>
+</tr>
+<tr>
+<td>Need to quickly rerun inference or training inside the container</td>
+<td>✅ Yes</td>
+<td>❌ No</td>
+</tr>
+<tr>
+<td>Deploying the updated script across multiple Kubernetes Pods</td>
+<td>❌ No</td>
+<td>✅ Yes</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 class="code-line" data-line-start=18 data-line-end=19 ><a id="Scenario_1_Quick_Script_Testing_Inside_a_Running_Container_18"></a>Scenario 1: Quick Script Testing Inside a Running Container</h2>
+<p class="has-line-data" data-line-start="20" data-line-end="21">Use this when you want to quickly test minor changes to your script without affecting Kubernetes Pods.</p>
+<h3 class="code-line" data-line-start=22 data-line-end=23 ><a id="Steps_22"></a>Steps:</h3>
+<ol>
+<li class="has-line-data" data-line-start="23" data-line-end="28">
+<p class="has-line-data" data-line-start="23" data-line-end="24">Copy the updated script into the running container:</p>
+<pre><code class="has-line-data" data-line-start="25" data-line-end="27" class="language-sh">nerdctl cp train_and_infer.py registry1:/app/train_and_infer.py
+</code></pre>
+</li>
+<li class="has-line-data" data-line-start="28" data-line-end="33">
+<p class="has-line-data" data-line-start="28" data-line-end="29">Run the script inside the container to test changes:</p>
+<pre><code class="has-line-data" data-line-start="30" data-line-end="32" class="language-sh">nerdctl <span class="hljs-built_in">exec</span> -it registry1 /bin/bash -c <span class="hljs-string">"python /app/train_and_infer.py"</span>
+</code></pre>
+</li>
+</ol>
+<h3 class="code-line" data-line-start=33 data-line-end=34 ><a id="How_to_View_Logs_33"></a>How to View Logs?</h3>
+<ul>
+<li class="has-line-data" data-line-start="34" data-line-end="35">If your script prints logs to stdout, they will appear after running <code>nerdctl exec</code>.</li>
+<li class="has-line-data" data-line-start="35" data-line-end="40">Check additional logs with:<pre><code class="has-line-data" data-line-start="37" data-line-end="39" class="language-sh">nerdctl logs registry1
+</code></pre>
+</li>
+</ul>
+<hr>
+<h2 class="code-line" data-line-start=42 data-line-end=43 ><a id="Scenario_2_Deploy_Script_Changes_to_Kubernetes_42"></a>Scenario 2: Deploy Script Changes to Kubernetes</h2>
+<p class="has-line-data" data-line-start="44" data-line-end="45">Use this when you want Kubernetes to run the updated script in new Pods.</p>
+<h3 class="code-line" data-line-start=46 data-line-end=47 ><a id="Steps_46"></a>Steps:</h3>
+<ol>
+<li class="has-line-data" data-line-start="47" data-line-end="52">
+<p class="has-line-data" data-line-start="47" data-line-end="48">Rebuild the container image:</p>
+<pre><code class="has-line-data" data-line-start="49" data-line-end="51" class="language-sh">nerdctl build -t my-new-image .
+</code></pre>
+</li>
+<li class="has-line-data" data-line-start="52" data-line-end="57">
+<p class="has-line-data" data-line-start="52" data-line-end="53">Push the new image:</p>
+<pre><code class="has-line-data" data-line-start="54" data-line-end="56" class="language-sh">nerdctl push my-new-image my-registry/my-new-image:latest
+</code></pre>
+</li>
+<li class="has-line-data" data-line-start="57" data-line-end="62">
+<p class="has-line-data" data-line-start="57" data-line-end="58">Delete the old Kubernetes Job:</p>
+<pre><code class="has-line-data" data-line-start="59" data-line-end="61" class="language-sh">kubectl delete job himcondatest620 -n himanshunagdev
+</code></pre>
+</li>
+<li class="has-line-data" data-line-start="62" data-line-end="67">
+<p class="has-line-data" data-line-start="62" data-line-end="63">Recreate the Job:</p>
+<pre><code class="has-line-data" data-line-start="64" data-line-end="66" class="language-sh">kubectl create <span class="hljs-operator">-f</span> &lt;job.yaml&gt;
+</code></pre>
+</li>
+</ol>
+<h3 class="code-line" data-line-start=67 data-line-end=68 ><a id="How_to_View_Logs_67"></a>How to View Logs?</h3>
+<p class="has-line-data" data-line-start="68" data-line-end="69">Get the new Pod name:</p>
+<pre><code class="has-line-data" data-line-start="70" data-line-end="72" class="language-sh">kubectl get pods -n himanshunagdev
+</code></pre>
+<p class="has-line-data" data-line-start="73" data-line-end="74">Check logs for the new Pod:</p>
+<pre><code class="has-line-data" data-line-start="75" data-line-end="77" class="language-sh">kubectl logs &lt;new-pod-name&gt; -n himanshunagdev <span class="hljs-operator">-f</span>
+</code></pre>
+<hr>
+<h2 class="code-line" data-line-start=80 data-line-end=81 ><a id="Scenario_3_Quickly_Rerun_the_Script_Inside_an_Existing_Kubernetes_Pod_80"></a>Scenario 3: Quickly Rerun the Script Inside an Existing Kubernetes Pod</h2>
+<p class="has-line-data" data-line-start="82" data-line-end="83">Use this when the Job is still running, and you want to execute the script inside an existing Pod.</p>
+<h3 class="code-line" data-line-start=84 data-line-end=85 ><a id="Steps_84"></a>Steps:</h3>
+<ol>
+<li class="has-line-data" data-line-start="85" data-line-end="90">
+<p class="has-line-data" data-line-start="85" data-line-end="86">Get the running Pod name:</p>
+<pre><code class="has-line-data" data-line-start="87" data-line-end="89" class="language-sh">kubectl get pods -n himanshunagdev
+</code></pre>
+</li>
+<li class="has-line-data" data-line-start="90" data-line-end="95">
+<p class="has-line-data" data-line-start="90" data-line-end="91">Execute the script inside the existing Pod:</p>
+<pre><code class="has-line-data" data-line-start="92" data-line-end="94" class="language-sh">kubectl <span class="hljs-built_in">exec</span> -it himcondatest620-pkbgr -n himanshunagdev -- python /app/train_and_infer.py
+</code></pre>
+</li>
+</ol>
+<h3 class="code-line" data-line-start=95 data-line-end=96 ><a id="How_to_View_Logs_95"></a>How to View Logs?</h3>
+<pre><code class="has-line-data" data-line-start="97" data-line-end="99" class="language-sh">kubectl logs himcondatest620-pkbgr -n himanshunagdev <span class="hljs-operator">-f</span>
+</code></pre>
+<hr>
+<h2 class="code-line" data-line-start=102 data-line-end=103 ><a id="Key_Benefits_of_This_Workflow_102"></a>Key Benefits of This Workflow</h2>
+<ul>
+<li class="has-line-data" data-line-start="103" data-line-end="104"><strong>Faster Development</strong> → Edit &amp; test scripts inside the container without rebuilding images.</li>
+<li class="has-line-data" data-line-start="104" data-line-end="105"><strong>Correct Kubernetes Deployment</strong> → Ensures Kubernetes always runs the latest version of your script.</li>
+<li class="has-line-data" data-line-start="105" data-line-end="107"><strong>Minimal YAML Changes</strong> → Avoids manually updating job.yaml after every edit.</li>
+</ul>
+<hr>
+<h2 class="code-line" data-line-start=109 data-line-end=110 ><a id="Summary_of_Steps_Based_on_Your_Needs_109"></a>Summary of Steps Based on Your Needs</h2>
+<table class="table table-striped table-bordered">
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Steps to Follow</th>
+<th>Where to View Logs?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Test changes quickly inside a running container</td>
+<td>nerdctl cp -&gt; nerdctl exec</td>
+<td>nerdctl logs registry1</td>
+</tr>
+<tr>
+<td>Deploy updated script in Kubernetes</td>
+<td>nerdctl build -&gt; nerdctl push -&gt; kubectl delete job -&gt; kubectl create -f</td>
+<td>kubectl logs &lt;new-pod-name&gt; -n himanshunagdev -f</td>
+</tr>
+<tr>
+<td>Rerun the script inside an existing Kubernetes Pod</td>
+<td>kubectl exec</td>
+<td>kubectl logs &lt;pod-name&gt; -n himanshunagdev -f</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h3 class="code-line" data-line-start=119 data-line-end=120 ><a id="Automate_This_Process_with_a_Shell_Script_119"></a>Automate This Process with a Shell Script?</h3>
+<p class="has-line-data" data-line-start="120" data-line-end="121">Would you like a shell script to automate these steps? Let me know!</p>
